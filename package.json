@@ -1,0 +1,22 @@
+{
+  "name": "reddit-market-research-app",
+  "version": "1.0.0",
+  "description": "Reddit Market Research Toolkit for mechanism extraction",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": ["reddit", "market-research", "scraper"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "uuid": "^13.0.0"
+  }
+}

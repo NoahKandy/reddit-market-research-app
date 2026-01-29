@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit Market Research Toolkit</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header>
+        <h1>🔬 Reddit <span>Market Research</span> Toolkit</h1>
+    </header>
+
+    <main>
+        <!-- Step Indicators -->
+        <div class="steps">
+            <div class="step active" id="step-1">
+                <div class="step-number">1</div>
+                <div class="step-title">Discover Subreddits</div>
+            </div>
+            <div class="step" id="step-2">
+                <div class="step-number">2</div>
+                <div class="step-title">Configure & Scrape</div>
+            </div>
+            <div class="step" id="step-3">
+                <div class="step-number">3</div>
+                <div class="step-title">Analyze Data</div>
+            </div>
+            <div class="step" id="step-4">
+                <div class="step-number">4</div>
+                <div class="step-title">View & Export</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Discovery -->
+        <section id="section-discovery" class="card">
+            <div class="card-header">
+                <h2>Step 1: Discover Related Subreddits</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-2">Enter a broad topic or niche to find all relevant subreddits, sorted by volume.</p>
+
+                <div class="search-box">
+                    <input type="text" id="topic-input" placeholder="e.g., gut health, weight loss, sleep, anxiety..." autofocus>
+                    <button class="btn btn-primary" id="discover-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        Discover
+                    </button>
+                </div>
+
+                <div id="discovery-loading" class="hidden">
+                    <div class="spinner"></div>
+                    <p class="text-muted" style="text-align: center;">Searching Reddit for related communities...</p>
+                </div>
+
+                <div id="discovery-results" class="hidden">
+                    <div class="section-header mt-3">
+                        <h3>Found <span id="subreddit-count">0</span> related subreddits</h3>
+                        <button class="btn btn-sm btn-secondary" id="select-all-btn">Select All Top 10</button>
+                    </div>
+
+                    <div class="subreddit-grid" id="subreddit-grid">
+                        <!-- Subreddits will be populated here -->
+                    </div>
+
+                    <div class="selected-subreddits" id="selected-subreddits">
+                        <!-- Selected pills will appear here -->
+                    </div>
+
+                    <div class="mt-3">
+                        <button class="btn btn-primary" id="proceed-to-config-btn" disabled>
+                            Continue to Configuration →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 2: Configuration -->
+        <section id="section-config" class="card hidden">
+            <div class="card-header">
+                <h2>Step 2: Configure Scraping</h2>
+                <button class="btn btn-sm btn-secondary" id="back-to-discovery-btn">← Back</button>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-2">
+                    <strong>Selected:</strong> <span id="config-selected-subs"></span>
+                </div>
+
+                <div class="config-grid">
+                    <div class="form-group">
+                        <label for="post-limit">Posts per Subreddit</label>
+                        <select id="post-limit">
+                            <option value="10">10 (Quick test)</option>
+                            <option value="25">25 (Light)</option>
+                            <option value="50" selected>50 (Standard)</option>
+                            <option value="100">100 (Deep)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="comment-limit">Comments per Post</label>
+                        <select id="comment-limit">
+                            <option value="10">10 (Quick)</option>
+                            <option value="25">25 (Light)</option>
+                            <option value="50" selected>50 (Standard)</option>
+                            <option value="100">100 (Deep)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sort-method">Sort By</label>
+                        <select id="sort-method">
+                            <option value="top" selected>Top</option>
+                            <option value="hot">Hot</option>
+                            <option value="new">New</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="time-filter">Time Range</label>
+                        <select id="time-filter">
+                            <option value="month">Past Month</option>
+                            <option value="year" selected>Past Year</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-success" id="start-scrape-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        Start Scraping
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 3: Scraping Progress -->
+        <section id="section-scraping" class="card hidden">
+            <div class="card-header">
+                <h2>Step 3: Scraping in Progress</h2>
+            </div>
+            <div class="card-body">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="scrape-progress-bar" style="width: 0%"></div>
+                    </div>
+                    <p class="progress-text" id="scrape-progress-text">Starting...</p>
+                </div>
+
+                <div class="alert alert-info">
+                    <strong>Tip:</strong> Scraping takes time due to Reddit rate limits (2 second delay between requests).
+                    You can leave this page open and come back.
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 4: Analysis -->
+        <section id="section-analysis" class="card hidden">
+            <div class="card-header">
+                <h2>Step 4: Analyze & Extract Insights</h2>
+            </div>
+            <div class="card-body">
+                <div id="analysis-ready">
+                    <div class="alert alert-success mb-2">
+                        <strong>Scraping Complete!</strong>
+                        <span id="scrape-summary"></span>
+                    </div>
+
+                    <p class="mb-2">Click below to run the mechanism extraction analysis on the scraped data.</p>
+
+                    <button class="btn btn-primary" id="start-analysis-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                        Run Extraction Analysis
+                    </button>
+                </div>
+
+                <div id="analysis-progress" class="hidden">
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="analysis-progress-bar" style="width: 0%"></div>
+                        </div>
+                        <p class="progress-text" id="analysis-progress-text">Starting analysis...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 5: Results -->
+        <section id="section-results" class="card hidden">
+            <div class="card-header">
+                <h2>Research Results</h2>
+                <div class="export-buttons">
+                    <button class="btn btn-sm btn-secondary" id="export-json-btn">Export JSON</button>
+                    <button class="btn btn-sm btn-secondary" id="export-md-btn">Export Markdown</button>
+                    <button class="btn btn-sm btn-secondary" id="export-csv-btn">Export CSV</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Results Summary -->
+                <div id="results-summary" class="mb-3">
+                    <!-- Summary will be inserted here -->
+                </div>
+
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab active" data-tab="tab-pain-points">Pain Points</button>
+                    <button class="tab" data-tab="tab-symptoms">Symptoms</button>
+                    <button class="tab" data-tab="tab-mechanisms">Mechanisms</button>
+                    <button class="tab" data-tab="tab-hypotheses">Hypotheses</button>
+                    <button class="tab" data-tab="tab-copy">Copy Bank</button>
+                    <button class="tab" data-tab="tab-sources">Sources</button>
+                </div>
+
+                <!-- Tab Content: Pain Points -->
+                <div id="tab-pain-points" class="tab-content active">
+                    <table class="results-table" id="pain-points-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Pain Point</th>
+                                <th>Priority</th>
+                                <th>Volume</th>
+                                <th>Emotional</th>
+                                <th>Threads</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <!-- Tab Content: Symptoms -->
+                <div id="tab-symptoms" class="tab-content">
+                    <div class="section-header">
+                        <h3>Top Symptoms</h3>
+                    </div>
+                    <table class="results-table" id="symptoms-table">
+                        <thead>
+                            <tr>
+                                <th>Symptom</th>
+                                <th>Category</th>
+                                <th>Frequency</th>
+                                <th>Sample Phrase</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+
+                    <div class="section-header mt-3">
+                        <h3>Symptom Clusters</h3>
+                    </div>
+                    <div id="symptom-clusters"></div>
+                </div>
+
+                <!-- Tab Content: Mechanisms -->
+                <div id="tab-mechanisms" class="tab-content">
+                    <div class="results-grid">
+                        <div>
+                            <h3 class="mb-2">Root Causes Mentioned</h3>
+                            <div id="root-causes-list"></div>
+                        </div>
+                        <div>
+                            <h3 class="mb-2">Failed Solutions</h3>
+                            <div id="failed-solutions-list"></div>
+                        </div>
+                        <div>
+                            <h3 class="mb-2">Working Solutions</h3>
+                            <div id="working-solutions-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Hypotheses -->
+                <div id="tab-hypotheses" class="tab-content">
+                    <div id="hypotheses-list"></div>
+                </div>
+
+                <!-- Tab Content: Copy Bank -->
+                <div id="tab-copy" class="tab-content">
+                    <div class="results-grid">
+                        <div>
+                            <h3 class="mb-2">Symptom Description Phrases</h3>
+                            <div id="symptom-phrases-list"></div>
+                        </div>
+                        <div>
+                            <h3 class="mb-2">Problem/Frustration Phrases</h3>
+                            <div id="problem-phrases-list"></div>
+                        </div>
+                        <div>
+                            <h3 class="mb-2">Desire/Outcome Phrases</h3>
+                            <div id="desire-phrases-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Sources -->
+                <div id="tab-sources" class="tab-content">
+                    <table class="results-table" id="sources-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Title</th>
+                                <th>Subreddit</th>
+                                <th>Score</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Job History -->
+        <section id="section-history" class="card">
+            <div class="card-header">
+                <h2>Recent Jobs</h2>
+                <button class="btn btn-sm btn-secondary" id="refresh-jobs-btn">Refresh</button>
+            </div>
+            <div class="card-body">
+                <ul class="job-list" id="job-list">
+                    <li class="empty-state">No jobs yet. Start by discovering subreddits above.</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
