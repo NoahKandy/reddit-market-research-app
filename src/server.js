@@ -2,11 +2,19 @@
  * Reddit Market Research App - Main Server
  */
 
+// Load environment variables from .env file FIRST
+// Use override: true to replace empty env vars (e.g., from Claude for Desktop)
+require('dotenv').config({ override: true });
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const apiRoutes = require('./routes/api');
 const jobManager = require('./services/jobManager');
+const claudeService = require('./services/claudeService');
+
+// Reload Claude service API key from environment (ensures dotenv has run)
+claudeService.reloadFromEnv();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

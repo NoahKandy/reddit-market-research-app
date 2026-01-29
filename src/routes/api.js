@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const redditService = require('../services/redditService');
 const jobManager = require('../services/jobManager');
+const claudeService = require('../services/claudeService');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -133,6 +134,35 @@ router.get('/jobs/:id/analysis', async (req, res) => {
 });
 
 /**
+ * GET /api/jobs/:id/export-data
+ * Export raw scraped data as JSON
+ */
+router.get('/jobs/:id/export-data', async (req, res) => {
+    try {
+        const job = jobManager.getJob(req.params.id);
+        if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+
+        const data = await jobManager.getScrapedData(req.params.id);
+        if (!data) {
+            return res.status(404).json({ error: 'Scraped data not found' });
+        }
+
+        const topicSlug = (job.config.topic || 'scrape').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `reddit_data_${topicSlug}_${timestamp}.json`;
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.send(JSON.stringify(data, null, 2));
+    } catch (err) {
+        console.error('Export data error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
  * GET /api/jobs/:id/export
  * Export analysis results
  */
@@ -165,6 +195,43 @@ router.delete('/jobs/:id', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error('Delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/settings
+ * Get current settings (API key status)
+ */
+router.get('/settings', (req, res) => {
+    const envKeyConfigured = !!process.env.ANTHROPIC_API_KEY;
+    res.json({
+        claudeApiConfigured: claudeService.isConfigured(),
+        apiKeyFromEnv: envKeyConfigured, // If true, hide the manual API key input
+        claudeModel: 'claude-sonnet-4-20250514'
+    });
+});
+
+/**
+ * POST /api/settings/api-key
+ * Set Claude API key
+ */
+router.post('/settings/api-key', (req, res) => {
+    try {
+        const { apiKey } = req.body;
+        if (!apiKey || typeof apiKey !== 'string') {
+            return res.status(400).json({ error: 'API key required' });
+        }
+
+        // Basic validation - API keys start with 'sk-ant-'
+        if (!apiKey.startsWith('sk-ant-')) {
+            return res.status(400).json({ error: 'Invalid API key format. Anthropic API keys start with sk-ant-' });
+        }
+
+        claudeService.setApiKey(apiKey);
+        res.json({ success: true, configured: true });
+    } catch (err) {
+        console.error('API key setting error:', err);
         res.status(500).json({ error: err.message });
     }
 });

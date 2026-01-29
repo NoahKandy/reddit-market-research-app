@@ -524,6 +524,13 @@ select:focus {
     margin: 0;
 }
 
+/* Button Groups */
+.button-group {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
 /* Export Buttons */
 .export-buttons {
     display: flex;
@@ -781,4 +788,161 @@ select:focus {
 
 .hidden {
     display: none !important;
+}
+
+/* API Key Section */
+.api-key-section {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.25rem;
+}
+
+.api-key-section.configured {
+    border-color: var(--success);
+    background: rgba(70, 209, 96, 0.05);
+}
+
+.api-key-section .section-header {
+    margin-bottom: 0.75rem;
+}
+
+.api-key-section .section-header h4 {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.api-key-form {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.api-key-input {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: monospace;
+}
+
+.api-key-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.api-key-section .small {
+    font-size: 0.8rem;
+}
+
+.api-key-section a {
+    color: var(--secondary);
+    text-decoration: none;
+}
+
+.api-key-section a:hover {
+    text-decoration: underline;
+}
+
+/* Full Report Content */
+.full-report-content {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.markdown-content {
+    line-height: 1.8;
+}
+
+.markdown-content h2 {
+    color: var(--primary);
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.markdown-content h3 {
+    color: var(--secondary);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content h4 {
+    color: var(--text-primary);
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content p {
+    margin-bottom: 1rem;
+}
+
+.markdown-content ul {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.markdown-content li {
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content strong {
+    color: var(--text-primary);
+}
+
+.markdown-content em {
+    color: var(--text-secondary);
+}
+
+.markdown-content code {
+    background: var(--bg-card);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background: var(--bg-card);
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+.markdown-content hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 2rem 0;
+}
+
+.markdown-content hr.section-divider {
+    border-top: 2px solid var(--primary);
+    margin: 2.5rem 0;
+}
+
+.markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid var(--border-color);
+}
+
+.markdown-content table th {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-weight: 600;
 }

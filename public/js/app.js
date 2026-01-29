@@ -8,6 +8,7 @@ class RedditResearchApp {
         this.currentJobId = null;
         this.pollInterval = null;
         this.discoveredSubreddits = [];
+        this.apiKeyConfigured = false;
 
         this.init();
     }
@@ -15,6 +16,43 @@ class RedditResearchApp {
     init() {
         this.bindEvents();
         this.loadJobs();
+        this.checkSettings();
+    }
+
+    async checkSettings() {
+        try {
+            const response = await fetch('/api/settings');
+            const settings = await response.json();
+            this.apiKeyConfigured = settings.claudeApiConfigured;
+            this.apiKeyFromEnv = settings.apiKeyFromEnv;
+            this.updateApiKeyStatus();
+        } catch (err) {
+            console.error('Error checking settings:', err);
+        }
+    }
+
+    updateApiKeyStatus() {
+        const apiKeySection = document.getElementById('api-key-section');
+        const apiKeyStatus = document.getElementById('api-key-status');
+
+        if (apiKeySection) {
+            if (this.apiKeyFromEnv) {
+                // API key is set from environment - hide the input form
+                apiKeyStatus.innerHTML = '<span class="text-success">✓ API key configured</span>';
+                apiKeySection.classList.add('configured');
+                // Hide the input form since key is pre-configured
+                const apiKeyForm = apiKeySection.querySelector('.api-key-form');
+                const apiKeyHelp = apiKeySection.querySelector('p.text-muted');
+                if (apiKeyForm) apiKeyForm.style.display = 'none';
+                if (apiKeyHelp) apiKeyHelp.style.display = 'none';
+            } else if (this.apiKeyConfigured) {
+                apiKeyStatus.innerHTML = '<span class="text-success">✓ Claude API key configured</span>';
+                apiKeySection.classList.add('configured');
+            } else {
+                apiKeyStatus.innerHTML = '<span class="text-warning">⚠ Claude API key not configured</span>';
+                apiKeySection.classList.remove('configured');
+            }
+        }
     }
 
     bindEvents() {
@@ -32,6 +70,7 @@ class RedditResearchApp {
 
         // Analysis
         document.getElementById('start-analysis-btn').addEventListener('click', () => this.startAnalysis());
+        document.getElementById('export-scraped-data-btn').addEventListener('click', () => this.exportScrapedData());
 
         // Export
         document.getElementById('export-json-btn').addEventListener('click', () => this.exportResults('json'));
@@ -45,6 +84,43 @@ class RedditResearchApp {
 
         // Job history
         document.getElementById('refresh-jobs-btn').addEventListener('click', () => this.loadJobs());
+
+        // API Key
+        const saveApiKeyBtn = document.getElementById('save-api-key-btn');
+        if (saveApiKeyBtn) {
+            saveApiKeyBtn.addEventListener('click', () => this.saveApiKey());
+        }
+    }
+
+    async saveApiKey() {
+        const input = document.getElementById('api-key-input');
+        const apiKey = input.value.trim();
+
+        if (!apiKey) {
+            alert('Please enter an API key');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/settings/api-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            this.apiKeyConfigured = true;
+            this.updateApiKeyStatus();
+            input.value = '';
+            alert('API key saved successfully!');
+        } catch (err) {
+            alert('Error saving API key: ' + err.message);
+        }
     }
 
     // ====================
@@ -286,6 +362,12 @@ class RedditResearchApp {
     // ====================
 
     async startAnalysis() {
+        // Check if API key is configured
+        if (!this.apiKeyConfigured) {
+            alert('Claude API key is not configured. Please add your API key in the settings panel below.');
+            return;
+        }
+
         try {
             const response = await fetch(`/api/jobs/${this.currentJobId}/analyze`, {
                 method: 'POST'
@@ -357,37 +439,182 @@ class RedditResearchApp {
     // ====================
 
     renderResults(analysis) {
+        // Check if this is new Claude-based analysis (has rawMarkdown)
+        if (analysis.rawMarkdown) {
+            this.renderClaudeResults(analysis);
+        } else {
+            // Legacy format (basic analysis)
+            this.renderLegacyResults(analysis);
+        }
+    }
+
+    renderClaudeResults(analysis) {
         // Summary
+        const summary = document.getElementById('results-summary');
+        const painPointCount = analysis.structured?.painPoints?.length || 0;
+        const hypothesisCount = analysis.structured?.hypotheses?.length || 0;
+
+        summary.innerHTML = `
+            <div class="alert alert-success">
+                <strong>AI Analysis Complete!</strong>
+                Identified ${painPointCount} pain points and generated ${hypothesisCount} mechanism hypotheses.
+                <br><small class="text-muted">Analyzed ${analysis.metadata?.totalPosts || 0} posts and ${analysis.metadata?.totalComments || 0} comments.</small>
+            </div>
+        `;
+
+        // Render the full markdown analysis
+        this.renderMarkdownAnalysis(analysis.rawMarkdown, analysis.structured);
+
+        // Update tabs to show markdown content
+        this.setupMarkdownTabs(analysis);
+    }
+
+    renderMarkdownAnalysis(markdown, structured) {
+        // Pain Points from structured data
+        if (structured?.painPoints?.length > 0) {
+            const tbody = document.querySelector('#pain-points-table tbody');
+            tbody.innerHTML = '';
+
+            structured.painPoints.forEach((pp, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td><strong>${this.escapeHtml(pp.name)}</strong></td>
+                    <td><span class="score-badge ${this.getScoreClass(pp.priorityScore)}">${pp.priorityScore.toFixed(1)}</span></td>
+                    <td>${pp.volumeScore}</td>
+                    <td>${pp.emotionalScore}</td>
+                    <td>-</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Hypotheses from structured data
+        if (structured?.hypotheses?.length > 0) {
+            const container = document.getElementById('hypotheses-list');
+            container.innerHTML = '';
+
+            structured.hypotheses.forEach((h) => {
+                container.innerHTML += `
+                    <div class="hypothesis-card">
+                        <h4>Hypothesis #${h.number}: ${this.escapeHtml(h.name)}</h4>
+                        <span class="type-badge">${h.type}</span>
+
+                        <dl>
+                            <dt>Target Pain Points</dt>
+                            <dd>${this.escapeHtml(h.targetPainPoints)}</dd>
+
+                            ${h.sampleHook ? `
+                            <dt>Sample Hook</dt>
+                            <dd><strong>"${this.escapeHtml(h.sampleHook)}"</strong></dd>
+                            ` : ''}
+
+                            ${h.sampleLead ? `
+                            <dt>Sample Lead</dt>
+                            <dd><em>"${this.escapeHtml(h.sampleLead)}"</em></dd>
+                            ` : ''}
+                        </dl>
+                    </div>
+                `;
+            });
+        }
+    }
+
+    setupMarkdownTabs(analysis) {
+        // Show the full report in a dedicated tab
+        const fullReportContainer = document.getElementById('full-report');
+        if (fullReportContainer && analysis.rawMarkdown) {
+            // Convert markdown to HTML (basic conversion)
+            const htmlContent = this.markdownToHtml(analysis.rawMarkdown);
+            fullReportContainer.innerHTML = `
+                <div class="markdown-content">
+                    ${htmlContent}
+                </div>
+            `;
+        }
+
+        // Clear sections that are now in full report
+        const symptomsList = document.getElementById('symptoms-table');
+        if (symptomsList) {
+            symptomsList.closest('.tab-content').innerHTML = `
+                <div class="alert alert-info">
+                    <strong>Symptoms Extracted</strong><br>
+                    Detailed symptom information is included in the Full Report tab.
+                    Export as Markdown to get the complete analysis.
+                </div>
+            `;
+        }
+    }
+
+    markdownToHtml(markdown) {
+        // Basic markdown to HTML conversion
+        let html = markdown
+            // Headers
+            .replace(/^### (.*$)/gm, '<h4>$1</h4>')
+            .replace(/^## (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^# (.*$)/gm, '<h2>$1</h2>')
+            // Bold
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            // Italic
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            // Code blocks
+            .replace(/```([^`]+)```/g, '<pre><code>$1</code></pre>')
+            // Inline code
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // Horizontal rules
+            .replace(/^---$/gm, '<hr>')
+            .replace(/^===.*===$/gm, '<hr class="section-divider">')
+            // Lists
+            .replace(/^\- (.+)$/gm, '<li>$1</li>')
+            // Line breaks
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+
+        // Wrap in paragraphs
+        html = '<p>' + html + '</p>';
+
+        // Clean up empty paragraphs
+        html = html.replace(/<p>\s*<\/p>/g, '');
+
+        // Wrap list items
+        html = html.replace(/(<li>.*<\/li>)+/g, '<ul>$&</ul>');
+
+        return html;
+    }
+
+    renderLegacyResults(analysis) {
+        // Original rendering logic for legacy format
         const summary = document.getElementById('results-summary');
         summary.innerHTML = `
             <div class="alert alert-success">
                 <strong>Analysis Complete!</strong>
-                Found ${analysis.summary.totalPainPoints} pain points,
-                ${analysis.summary.totalSymptoms} symptoms,
-                and generated ${analysis.summary.hypothesesGenerated} mechanism hypotheses.
+                Found ${analysis.summary?.totalPainPoints || 0} pain points,
+                ${analysis.summary?.totalSymptoms || 0} symptoms,
+                and generated ${analysis.summary?.hypothesesGenerated || 0} mechanism hypotheses.
             </div>
         `;
 
-        // Pain Points
-        this.renderPainPoints(analysis.painPointAnalysis.priorityRanking);
-
-        // Symptoms
-        this.renderSymptoms(analysis.symptomAnalysis);
-
-        // Mechanisms
-        this.renderMechanisms(analysis.mechanismMaterial);
-
-        // Hypotheses
-        this.renderHypotheses(analysis.mechanismHypotheses);
-
-        // Copy Bank
-        this.renderCopyBank(analysis.copyBank);
-
-        // Sources
-        this.renderSources(analysis.sourceLog.topThreads);
+        if (analysis.painPointAnalysis?.priorityRanking) {
+            this.renderPainPointsLegacy(analysis.painPointAnalysis.priorityRanking);
+        }
+        if (analysis.symptomAnalysis) {
+            this.renderSymptomsLegacy(analysis.symptomAnalysis);
+        }
+        if (analysis.mechanismMaterial) {
+            this.renderMechanisms(analysis.mechanismMaterial);
+        }
+        if (analysis.mechanismHypotheses) {
+            this.renderHypothesesLegacy(analysis.mechanismHypotheses);
+        }
+        if (analysis.copyBank) {
+            this.renderCopyBank(analysis.copyBank);
+        }
+        if (analysis.sourceLog?.topThreads) {
+            this.renderSources(analysis.sourceLog.topThreads);
+        }
     }
 
-    renderPainPoints(painPoints) {
+    renderPainPointsLegacy(painPoints) {
         const tbody = document.querySelector('#pain-points-table tbody');
         tbody.innerHTML = '';
 
@@ -405,35 +632,37 @@ class RedditResearchApp {
         });
     }
 
-    renderSymptoms(symptomAnalysis) {
+    renderSymptomsLegacy(symptomAnalysis) {
         const tbody = document.querySelector('#symptoms-table tbody');
         tbody.innerHTML = '';
 
-        symptomAnalysis.topSymptoms.forEach(s => {
+        (symptomAnalysis.topSymptoms || []).forEach(s => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${this.escapeHtml(s.name)}</strong></td>
                 <td><span class="category-badge">${s.category}</span></td>
                 <td>${s.frequency}</td>
-                <td class="text-muted">${s.samplePhrases[0] ? this.escapeHtml(s.samplePhrases[0]) : '-'}</td>
+                <td class="text-muted">${s.samplePhrases?.[0] ? this.escapeHtml(s.samplePhrases[0]) : '-'}</td>
             `;
             tbody.appendChild(tr);
         });
 
         // Clusters
         const clusterContainer = document.getElementById('symptom-clusters');
-        clusterContainer.innerHTML = '';
+        if (clusterContainer) {
+            clusterContainer.innerHTML = '';
 
-        symptomAnalysis.clusters.forEach(cluster => {
-            const div = document.createElement('div');
-            div.className = 'copy-card';
-            div.innerHTML = `
-                <strong>${this.escapeHtml(cluster.name)}</strong>
-                <p class="text-muted mt-1">Frequency: ${cluster.frequency} occurrences</p>
-                <p class="text-muted">${cluster.symptoms.join(' + ')}</p>
-            `;
-            clusterContainer.appendChild(div);
-        });
+            (symptomAnalysis.clusters || []).forEach(cluster => {
+                const div = document.createElement('div');
+                div.className = 'copy-card';
+                div.innerHTML = `
+                    <strong>${this.escapeHtml(cluster.name)}</strong>
+                    <p class="text-muted mt-1">Frequency: ${cluster.frequency} occurrences</p>
+                    <p class="text-muted">${(cluster.symptoms || []).join(' + ')}</p>
+                `;
+                clusterContainer.appendChild(div);
+            });
+        }
     }
 
     renderMechanisms(mechanismMaterial) {
@@ -474,11 +703,11 @@ class RedditResearchApp {
         });
     }
 
-    renderHypotheses(hypotheses) {
+    renderHypothesesLegacy(hypotheses) {
         const container = document.getElementById('hypotheses-list');
         container.innerHTML = '';
 
-        hypotheses.forEach((h, i) => {
+        (hypotheses || []).forEach((h, i) => {
             container.innerHTML += `
                 <div class="hypothesis-card">
                     <h4>Hypothesis #${i + 1}: ${this.escapeHtml(h.name)}</h4>
@@ -486,10 +715,10 @@ class RedditResearchApp {
 
                     <dl>
                         <dt>Target Pain Points</dt>
-                        <dd>${h.targetPainPoints.map(p => this.escapeHtml(p)).join(', ')}</dd>
+                        <dd>${(h.targetPainPoints || []).map(p => this.escapeHtml(p)).join(', ')}</dd>
 
                         <dt>Key Symptoms</dt>
-                        <dd>${h.keySymptoms.map(s => this.escapeHtml(s)).join(', ')}</dd>
+                        <dd>${(h.keySymptoms || []).map(s => this.escapeHtml(s)).join(', ')}</dd>
 
                         <dt>Problem Side</dt>
                         <dd>${this.escapeHtml(h.problemSide)}</dd>
@@ -586,6 +815,15 @@ class RedditResearchApp {
         }
 
         window.open(`/api/jobs/${this.currentJobId}/export?format=${format}`, '_blank');
+    }
+
+    async exportScrapedData() {
+        if (!this.currentJobId) {
+            alert('No job selected');
+            return;
+        }
+
+        window.open(`/api/jobs/${this.currentJobId}/export-data`, '_blank');
     }
 
     // ====================

@@ -170,16 +170,39 @@
                         <span id="scrape-summary"></span>
                     </div>
 
-                    <p class="mb-2">Click below to run the mechanism extraction analysis on the scraped data.</p>
+                    <p class="mb-2">Click below to run the AI-powered extraction analysis using Claude. This will generate detailed pain points, symptoms, mechanism hypotheses, and copy bank material.</p>
 
-                    <button class="btn btn-primary" id="start-analysis-btn">
+                    <div class="button-group mb-2">
+                        <button class="btn btn-primary" id="start-analysis-btn">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                             <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                             <line x1="12" y1="22.08" x2="12" y2="12"></line>
                         </svg>
-                        Run Extraction Analysis
-                    </button>
+                        Run AI Extraction Analysis
+                        </button>
+                        <button class="btn btn-secondary" id="export-scraped-data-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export Scraped Data (JSON)
+                        </button>
+                    </div>
+
+                    <!-- API Key Configuration -->
+                    <div id="api-key-section" class="api-key-section mt-3">
+                        <div class="section-header">
+                            <h4>Claude API Configuration</h4>
+                            <span id="api-key-status"></span>
+                        </div>
+                        <div class="api-key-form">
+                            <input type="password" id="api-key-input" placeholder="sk-ant-api..." class="api-key-input">
+                            <button class="btn btn-secondary" id="save-api-key-btn">Save API Key</button>
+                        </div>
+                        <p class="text-muted small mt-1">Your API key is stored only for this session. Get your API key from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
+                    </div>
                 </div>
 
                 <div id="analysis-progress" class="hidden">
@@ -187,7 +210,7 @@
                         <div class="progress-bar">
                             <div class="progress-fill" id="analysis-progress-bar" style="width: 0%"></div>
                         </div>
-                        <p class="progress-text" id="analysis-progress-text">Starting analysis...</p>
+                        <p class="progress-text" id="analysis-progress-text">Starting AI analysis (this may take 1-2 minutes)...</p>
                     </div>
                 </div>
             </div>
@@ -211,16 +234,24 @@
 
                 <!-- Tabs -->
                 <div class="tabs">
-                    <button class="tab active" data-tab="tab-pain-points">Pain Points</button>
+                    <button class="tab active" data-tab="tab-full-report">Full Report</button>
+                    <button class="tab" data-tab="tab-pain-points">Pain Points</button>
+                    <button class="tab" data-tab="tab-hypotheses">Hypotheses</button>
                     <button class="tab" data-tab="tab-symptoms">Symptoms</button>
                     <button class="tab" data-tab="tab-mechanisms">Mechanisms</button>
-                    <button class="tab" data-tab="tab-hypotheses">Hypotheses</button>
                     <button class="tab" data-tab="tab-copy">Copy Bank</button>
                     <button class="tab" data-tab="tab-sources">Sources</button>
                 </div>
 
+                <!-- Tab Content: Full Report -->
+                <div id="tab-full-report" class="tab-content active">
+                    <div id="full-report" class="full-report-content">
+                        <p class="text-muted">Run analysis to see the complete AI-generated research report.</p>
+                    </div>
+                </div>
+
                 <!-- Tab Content: Pain Points -->
-                <div id="tab-pain-points" class="tab-content active">
+                <div id="tab-pain-points" class="tab-content">
                     <table class="results-table" id="pain-points-table">
                         <thead>
                             <tr>

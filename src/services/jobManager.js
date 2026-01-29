@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs').promises;
 const path = require('path');
 const redditService = require('./redditService');
-const analysisService = require('./analysisService');
+const claudeService = require('./claudeService');
 
 class JobManager {
     constructor() {
@@ -144,23 +144,29 @@ class JobManager {
     }
 
     /**
-     * Internal: Run the analysis job
+     * Internal: Run the analysis job using Claude API
      */
     async _runAnalysisJob(job) {
         try {
+            // Check if Claude API is configured
+            if (!claudeService.isConfigured()) {
+                throw new Error('Claude API key not configured. Please set your API key in settings.');
+            }
+
             // Load scraped data
             const dataFilePath = path.join(this.dataDir, job.dataFile);
             const rawData = await fs.readFile(dataFilePath, 'utf-8');
             const scrapedData = JSON.parse(rawData);
 
-            // Run analysis
-            const analysisResult = await analysisService.analyzeData(
+            // Run AI-powered analysis using Claude
+            const analysisResult = await claudeService.analyzeScrapedData(
                 scrapedData,
+                job.config.topic,
                 (progress) => {
                     job.progress = {
                         phase: progress.phase,
                         message: progress.message,
-                        percent: progress.progress
+                        percent: progress.percent
                     };
                 }
             );
@@ -173,7 +179,12 @@ class JobManager {
 
             job.progress = { phase: 'complete', message: 'Analysis complete!', percent: 100 };
             job.status = 'analyzed';
-            job.analysisResult = analysisResult.summary;
+            job.analysisResult = {
+                painPointsFound: analysisResult.structured.painPoints.length,
+                hypothesesGenerated: analysisResult.structured.hypotheses.length,
+                totalPosts: analysisResult.structured.totalPosts,
+                totalComments: analysisResult.structured.totalComments
+            };
 
         } catch (err) {
             job.status = 'analysis_failed';
@@ -233,23 +244,25 @@ class JobManager {
 
         const analysis = await this.getAnalysisResult(jobId);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const topicSlug = (job.config.topic || 'analysis').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
         let fileName, content, contentType;
 
         switch (format) {
             case 'json':
-                fileName = `export_${job.config.topic.replace(/\s+/g, '_')}_${timestamp}.json`;
+                fileName = `export_${topicSlug}_${timestamp}.json`;
                 content = JSON.stringify(analysis, null, 2);
                 contentType = 'application/json';
                 break;
 
             case 'markdown':
-                fileName = `export_${job.config.topic.replace(/\s+/g, '_')}_${timestamp}.md`;
-                content = this._generateMarkdownReport(analysis);
+                fileName = `export_${topicSlug}_${timestamp}.md`;
+                // Use the raw markdown from Claude analysis directly
+                content = analysis.rawMarkdown || this._generateMarkdownReport(analysis);
                 contentType = 'text/markdown';
                 break;
 
             case 'csv':
-                fileName = `export_${job.config.topic.replace(/\s+/g, '_')}_${timestamp}.csv`;
+                fileName = `export_${topicSlug}_${timestamp}.csv`;
                 content = this._generateCsvExport(analysis);
                 contentType = 'text/csv';
                 break;
@@ -265,101 +278,63 @@ class JobManager {
     }
 
     /**
-     * Generate markdown report
+     * Generate markdown report (fallback if rawMarkdown not available)
      */
     _generateMarkdownReport(analysis) {
+        // If we have rawMarkdown from Claude, use it
+        if (analysis.rawMarkdown) {
+            return analysis.rawMarkdown;
+        }
+
+        // Fallback: generate basic report from structured data
         let md = `# Reddit Market Research Report\n\n`;
-        md += `**Generated:** ${analysis.metadata.analysisCompletedAt}\n`;
-        md += `**Subreddits:** ${analysis.metadata.subreddits.join(', ')}\n`;
-        md += `**Total Posts:** ${analysis.metadata.totalPosts}\n`;
-        md += `**Total Comments:** ${analysis.metadata.totalComments}\n\n`;
+        md += `**Generated:** ${analysis.metadata?.analysisCompletedAt || new Date().toISOString()}\n`;
+        md += `**Topic:** ${analysis.metadata?.topic || 'N/A'}\n`;
+        md += `**Subreddits:** ${(analysis.metadata?.subreddits || []).join(', ')}\n`;
+        md += `**Total Posts:** ${analysis.metadata?.totalPosts || 0}\n`;
+        md += `**Total Comments:** ${analysis.metadata?.totalComments || 0}\n\n`;
 
-        md += `---\n\n## Summary\n\n`;
-        md += `- **Pain Points Identified:** ${analysis.summary.totalPainPoints}\n`;
-        md += `- **Symptoms Extracted:** ${analysis.summary.totalSymptoms}\n`;
-        md += `- **Symptom Clusters:** ${analysis.summary.totalClusters}\n`;
-        md += `- **Top Pain Point:** ${analysis.summary.topPainPoint}\n`;
-        md += `- **Top Symptom:** ${analysis.summary.topSymptom}\n\n`;
+        if (analysis.structured) {
+            md += `---\n\n## Pain Points Identified (${analysis.structured.painPoints?.length || 0})\n\n`;
+            for (const pp of (analysis.structured.painPoints || [])) {
+                md += `### ${pp.number}. ${pp.name}\n`;
+                md += `- **Priority Score:** ${pp.priorityScore}\n`;
+                md += `- **Volume Score:** ${pp.volumeScore}\n`;
+                md += `- **Emotional Score:** ${pp.emotionalScore}\n\n`;
+            }
 
-        md += `---\n\n## Pain Point Priority Ranking\n\n`;
-        md += `| Rank | Pain Point | Priority Score | Volume | Emotional |\n`;
-        md += `|------|------------|----------------|--------|----------|\n`;
-        for (const pp of analysis.painPointAnalysis.priorityRanking) {
-            md += `| ${pp.rank} | ${pp.name} | ${pp.priorityScore} | ${pp.volumeScore} | ${pp.emotionalScore} |\n`;
-        }
-
-        md += `\n---\n\n## Top Symptoms\n\n`;
-        md += `| Symptom | Category | Frequency |\n`;
-        md += `|---------|----------|----------|\n`;
-        for (const s of analysis.symptomAnalysis.topSymptoms.slice(0, 15)) {
-            md += `| ${s.name} | ${s.category} | ${s.frequency} |\n`;
-        }
-
-        md += `\n---\n\n## Mechanism Hypotheses\n\n`;
-        for (const h of analysis.mechanismHypotheses) {
-            md += `### ${h.name}\n\n`;
-            md += `**Type:** ${h.type}\n\n`;
-            md += `**Target Pain Points:** ${h.targetPainPoints.join(', ')}\n\n`;
-            md += `**Key Symptoms:** ${h.keySymptoms.join(', ')}\n\n`;
-            md += `**Problem Side:** ${h.problemSide}\n\n`;
-            md += `**Solution Side:** ${h.solutionSide}\n\n`;
-            md += `**Knowledge Gap:** ${h.knowledgeGap}\n\n`;
-            md += `**Sample Hook:** ${h.sampleHook}\n\n`;
-            md += `**Sample Lead:** ${h.sampleLead}\n\n`;
-            md += `---\n\n`;
-        }
-
-        md += `## Copy Bank\n\n`;
-        md += `### Symptom Phrases\n\n`;
-        for (const p of analysis.copyBank.symptomPhrases.slice(0, 10)) {
-            md += `- "${p.phrase}"\n`;
-        }
-
-        md += `\n### Problem Phrases\n\n`;
-        for (const p of analysis.copyBank.problemPhrases.slice(0, 10)) {
-            md += `- "${p.phrase}"\n`;
-        }
-
-        md += `\n### Desire Phrases\n\n`;
-        for (const p of analysis.copyBank.desirePhrases.slice(0, 10)) {
-            md += `- "${p.phrase}"\n`;
-        }
-
-        md += `\n---\n\n## Source Log (Top 20 Threads)\n\n`;
-        for (const s of analysis.sourceLog.topThreads) {
-            md += `${s.index}. [${s.analysisValue}] **${s.title}**\n`;
-            md += `   - Score: ${s.score} | Comments: ${s.commentCount}\n`;
-            md += `   - ${s.url}\n\n`;
+            md += `---\n\n## Mechanism Hypotheses (${analysis.structured.hypotheses?.length || 0})\n\n`;
+            for (const h of (analysis.structured.hypotheses || [])) {
+                md += `### Hypothesis #${h.number}: ${h.name}\n`;
+                md += `- **Type:** ${h.type}\n`;
+                md += `- **Target Pain Points:** ${h.targetPainPoints}\n`;
+                md += `- **Sample Hook:** ${h.sampleHook}\n`;
+                md += `- **Sample Lead:** ${h.sampleLead}\n\n`;
+            }
         }
 
         return md;
     }
 
     /**
-     * Generate CSV export
+     * Generate CSV export from structured analysis
      */
     _generateCsvExport(analysis) {
-        let csv = 'Type,Name,Score,Details,Source\n';
+        let csv = 'Type,Name,Priority Score,Volume Score,Emotional Score,Details\n';
 
-        // Pain points
-        for (const pp of analysis.painPointAnalysis.fullList) {
-            csv += `Pain Point,"${pp.name}",${pp.priorityScore},"Volume: ${pp.volumeScore}, Emotional: ${pp.emotionalScore}",""\n`;
-        }
-
-        // Symptoms
-        for (const s of analysis.symptomAnalysis.topSymptoms) {
-            csv += `Symptom,"${s.name}",${s.frequency},"Category: ${s.category}",""\n`;
+        // Pain points from structured data
+        const painPoints = analysis.structured?.painPoints || [];
+        for (const pp of painPoints) {
+            const name = (pp.name || '').replace(/"/g, '""');
+            csv += `Pain Point,"${name}",${pp.priorityScore || 0},${pp.volumeScore || 0},${pp.emotionalScore || 0},""\n`;
         }
 
-        // Copy phrases
-        for (const p of analysis.copyBank.symptomPhrases) {
-            csv += `Copy - Symptom,"${p.phrase.replace(/"/g, '""')}",,"","${p.source}"\n`;
-        }
-        for (const p of analysis.copyBank.problemPhrases) {
-            csv += `Copy - Problem,"${p.phrase.replace(/"/g, '""')}",,"","${p.source}"\n`;
-        }
-        for (const p of analysis.copyBank.desirePhrases) {
-            csv += `Copy - Desire,"${p.phrase.replace(/"/g, '""')}",,"","${p.source}"\n`;
+        // Hypotheses
+        const hypotheses = analysis.structured?.hypotheses || [];
+        for (const h of hypotheses) {
+            const name = (h.name || '').replace(/"/g, '""');
+            const details = `Type: ${h.type || 'N/A'}, Target: ${(h.targetPainPoints || '').replace(/"/g, '""')}`;
+            csv += `Hypothesis,"${name}",,,,${details.replace(/"/g, '""')}\n`;
         }
 
         return csv;
