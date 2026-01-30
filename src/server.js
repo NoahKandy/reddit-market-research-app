@@ -36,7 +36,7 @@ app.get('/{*splat}', (req, res) => {
 async function start() {
     await jobManager.init();
 
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
         console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
