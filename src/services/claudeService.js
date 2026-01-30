@@ -10,7 +10,8 @@ class ClaudeService {
     constructor() {
         // Load API key from environment variable (for deployment)
         // Falls back to session-based key if env var not set
-        this.apiKey = process.env.ANTHROPIC_API_KEY || null;
+        // Trim to remove any whitespace/newlines that cause header errors
+        this.apiKey = process.env.ANTHROPIC_API_KEY?.trim() || null;
         this.model = 'claude-sonnet-4-20250514'; // Latest Sonnet model
         this.maxTokens = 16000; // Allow long responses for detailed analysis
     }
@@ -20,7 +21,7 @@ class ClaudeService {
      */
     reloadFromEnv() {
         if (process.env.ANTHROPIC_API_KEY) {
-            this.apiKey = process.env.ANTHROPIC_API_KEY;
+            this.apiKey = process.env.ANTHROPIC_API_KEY.trim();
         }
     }
 
@@ -35,7 +36,7 @@ class ClaudeService {
      * Set API key
      */
     setApiKey(key) {
-        this.apiKey = key;
+        this.apiKey = key?.trim() || null;
     }
 
     /**
