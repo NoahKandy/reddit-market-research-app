@@ -3,59 +3,33 @@
  * Uses public JSON endpoints (no API key required)
  */
 
-const https = require('https');
-const http = require('http');
-
 class RedditService {
     constructor() {
         this.baseUrl = 'https://www.reddit.com';
         this.delay = 2000; // 2 seconds between requests
-        this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+        this.userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     }
 
     /**
      * Make a request with rate limiting
      */
     async _makeRequest(url) {
-        return new Promise((resolve, reject) => {
-            const urlObj = new URL(url);
-            const client = urlObj.protocol === 'https:' ? https : http;
-
-            const options = {
-                hostname: urlObj.hostname,
-                path: urlObj.pathname + urlObj.search,
-                method: 'GET',
-                headers: {
-                    'User-Agent': this.userAgent,
-                    'Accept': 'application/json'
-                }
-            };
-
-            const req = client.request(options, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    try {
-                        if (res.statusCode === 200) {
-                            resolve(JSON.parse(data));
-                        } else if (res.statusCode === 429) {
-                            reject(new Error('Rate limited by Reddit. Please wait a moment.'));
-                        } else {
-                            reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
-                        }
-                    } catch (e) {
-                        reject(new Error('Failed to parse JSON response'));
-                    }
-                });
-            });
-
-            req.on('error', reject);
-            req.setTimeout(30000, () => {
-                req.destroy();
-                reject(new Error('Request timeout'));
-            });
-            req.end();
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'User-Agent': this.userAgent,
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
         });
+
+        if (response.status === 200) {
+            return await response.json();
+        } else if (response.status === 429) {
+            throw new Error('Rate limited by Reddit. Please wait a moment.');
+        } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
     }
 
     /**
