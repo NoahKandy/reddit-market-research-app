@@ -36,7 +36,9 @@ class JobManager {
                 postLimit: config.postLimit || 50,
                 commentLimit: config.commentLimit || 50,
                 sort: config.sort || 'top',
-                timeFilter: config.timeFilter || 'year'
+                timeFilter: config.timeFilter || 'year',
+                keywords: config.keywords || [],
+                matchAll: config.matchAll || false
             },
             progress: {
                 phase: 'pending',
@@ -82,12 +84,12 @@ class JobManager {
      */
     async _runScrapeJob(job) {
         try {
-            const { subreddits, postLimit, commentLimit, sort, timeFilter } = job.config;
+            const { subreddits, postLimit, commentLimit, sort, timeFilter, keywords, matchAll } = job.config;
 
-            // Scrape data
+            // Scrape data (with optional keyword filtering)
             const scrapedData = await redditService.scrapeSubreddits(
                 subreddits,
-                { sort, timeFilter, postLimit, commentLimit },
+                { sort, timeFilter, postLimit, commentLimit, keywords, matchAll },
                 (progress) => {
                     job.progress = {
                         phase: progress.phase,

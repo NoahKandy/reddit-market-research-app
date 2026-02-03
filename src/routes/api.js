@@ -34,12 +34,41 @@ router.get('/discover', async (req, res) => {
 });
 
 /**
+ * POST /api/preview
+ * Preview matching posts before scraping (keyword filter)
+ */
+router.post('/preview', async (req, res) => {
+    try {
+        const { subreddits, keywords, matchAll, sort, timeFilter } = req.body;
+
+        if (!subreddits || !Array.isArray(subreddits) || subreddits.length === 0) {
+            return res.status(400).json({ error: 'At least one subreddit required' });
+        }
+
+        if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+            return res.status(400).json({ error: 'At least one keyword required' });
+        }
+
+        const results = await redditService.previewKeywordMatches(
+            subreddits,
+            keywords,
+            { matchAll: matchAll || false, sort: sort || 'top', timeFilter: timeFilter || 'year' }
+        );
+
+        res.json(results);
+    } catch (err) {
+        console.error('Preview error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
  * POST /api/jobs
  * Create a new scraping job
  */
 router.post('/jobs', async (req, res) => {
     try {
-        const { subreddits, topic, postLimit, commentLimit, sort, timeFilter } = req.body;
+        const { subreddits, topic, postLimit, commentLimit, sort, timeFilter, keywords, matchAll } = req.body;
 
         if (!subreddits || !Array.isArray(subreddits) || subreddits.length === 0) {
             return res.status(400).json({ error: 'At least one subreddit required' });
@@ -51,7 +80,9 @@ router.post('/jobs', async (req, res) => {
             postLimit: postLimit || 50,
             commentLimit: commentLimit || 50,
             sort: sort || 'top',
-            timeFilter: timeFilter || 'year'
+            timeFilter: timeFilter || 'year',
+            keywords: keywords || [],
+            matchAll: matchAll || false
         });
 
         // Start the job immediately

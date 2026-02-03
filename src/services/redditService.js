@@ -319,6 +319,64 @@ class RedditService {
     }
 
     /**
+     * Check if text matches keywords based on match mode
+     */
+    _matchesKeywords(text, keywords, matchAll = false) {
+        if (!keywords || keywords.length === 0) return true;
+
+        const textLower = text.toLowerCase();
+        const keywordsLower = keywords.map(k => k.toLowerCase().trim());
+
+        if (matchAll) {
+            // AND mode - must match ALL keywords
+            return keywordsLower.every(keyword => textLower.includes(keyword));
+        } else {
+            // OR mode - must match ANY keyword
+            return keywordsLower.some(keyword => textLower.includes(keyword));
+        }
+    }
+
+    /**
+     * Preview keyword matches across subreddits (quick scan)
+     */
+    async previewKeywordMatches(subreddits, keywords, options = {}) {
+        const { matchAll = false, sort = 'top', timeFilter = 'year' } = options;
+        const results = [];
+        let totalMatches = 0;
+
+        for (const subreddit of subreddits) {
+            await this._sleep(this.delay);
+
+            // Fetch a batch of posts to scan
+            const posts = await this.getPosts(subreddit, { sort, timeFilter, limit: 100 });
+
+            // Filter posts that match keywords
+            const matchingPosts = posts.filter(post => {
+                const text = `${post.title} ${post.selftext}`;
+                return this._matchesKeywords(text, keywords, matchAll);
+            });
+
+            results.push({
+                subreddit,
+                totalScanned: posts.length,
+                matchingPosts: matchingPosts.length,
+                sampleTitles: matchingPosts.slice(0, 3).map(p =>
+                    p.title.length > 60 ? p.title.substring(0, 60) + '...' : p.title
+                )
+            });
+
+            totalMatches += matchingPosts.length;
+        }
+
+        return {
+            keywords,
+            matchAll,
+            totalMatches,
+            subredditResults: results
+        };
+    }
+
+    /**
      * Assess post value for extraction
      */
     assessPostValue(post) {
@@ -339,19 +397,25 @@ class RedditService {
     }
 
     /**
-     * Full scrape of multiple subreddits
+     * Full scrape of multiple subreddits with optional keyword filtering
      */
     async scrapeSubreddits(subreddits, options = {}, progressCallback = null) {
         const {
             sort = 'top',
             timeFilter = 'year',
             postLimit = 50,
-            commentLimit = 50
+            commentLimit = 50,
+            keywords = [],
+            matchAll = false
         } = options;
 
+        const hasKeywordFilter = keywords && keywords.length > 0;
         const allPosts = [];
         const sourceLog = [];
         let totalProgress = 0;
+
+        // If filtering by keywords, we need to fetch more posts to find enough matches
+        const fetchLimit = hasKeywordFilter ? Math.min(postLimit * 3, 100) : postLimit;
         const totalWork = subreddits.length * postLimit;
 
         for (const subreddit of subreddits) {
@@ -359,13 +423,26 @@ class RedditService {
                 progressCallback({
                     phase: 'posts',
                     subreddit,
-                    message: `Fetching posts from r/${subreddit}...`,
+                    message: hasKeywordFilter
+                        ? `Searching r/${subreddit} for keyword matches...`
+                        : `Fetching posts from r/${subreddit}...`,
                     progress: Math.round((totalProgress / totalWork) * 100)
                 });
             }
 
-            const posts = await this.getPosts(subreddit, { sort, timeFilter, limit: postLimit });
+            let posts = await this.getPosts(subreddit, { sort, timeFilter, limit: fetchLimit });
 
+            // Filter posts by keywords if specified
+            if (hasKeywordFilter) {
+                posts = posts.filter(post => {
+                    const text = `${post.title} ${post.selftext}`;
+                    return this._matchesKeywords(text, keywords, matchAll);
+                });
+                // Limit to requested amount after filtering
+                posts = posts.slice(0, postLimit);
+            }
+
+            let matchedPostCount = 0;
             for (let i = 0; i < posts.length; i++) {
                 const post = posts[i];
 
@@ -380,7 +457,17 @@ class RedditService {
                     });
                 }
 
-                post.comments = await this.getComments(post.permalink, commentLimit);
+                let comments = await this.getComments(post.permalink, commentLimit);
+
+                // Filter comments by keywords if specified
+                if (hasKeywordFilter) {
+                    comments = comments.filter(comment => {
+                        const commentText = comment.body + ' ' + (comment.replies || []).map(r => r.body).join(' ');
+                        return this._matchesKeywords(commentText, keywords, matchAll);
+                    });
+                }
+
+                post.comments = comments;
 
                 sourceLog.push({
                     index: sourceLog.length + 1,
@@ -389,10 +476,12 @@ class RedditService {
                     title: post.title.length > 80 ? post.title.substring(0, 80) + '...' : post.title,
                     score: post.score,
                     numComments: post.numComments,
-                    value: this.assessPostValue(post)
+                    value: this.assessPostValue(post),
+                    keywordMatched: hasKeywordFilter
                 });
 
                 totalProgress++;
+                matchedPostCount++;
             }
 
             allPosts.push(...posts);
@@ -404,6 +493,8 @@ class RedditService {
                 subreddits,
                 sort,
                 timeFilter,
+                keywords: hasKeywordFilter ? keywords : null,
+                matchAll: hasKeywordFilter ? matchAll : null,
                 totalPosts: allPosts.length,
                 totalComments: allPosts.reduce((sum, p) => sum + p.comments.length, 0)
             },

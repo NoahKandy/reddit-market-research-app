@@ -67,6 +67,7 @@ class RedditResearchApp {
         // Configuration
         document.getElementById('back-to-discovery-btn').addEventListener('click', () => this.showDiscoverySection());
         document.getElementById('start-scrape-btn').addEventListener('click', () => this.startScraping());
+        document.getElementById('preview-matches-btn').addEventListener('click', () => this.previewKeywordMatches());
 
         // Analysis
         document.getElementById('start-analysis-btn').addEventListener('click', () => this.startAnalysis());
@@ -268,17 +269,108 @@ class RedditResearchApp {
     }
 
     // ====================
+    // Keyword Filter & Preview
+    // ====================
+
+    getKeywords() {
+        const keywordsInput = document.getElementById('keywords-input');
+        if (!keywordsInput || !keywordsInput.value.trim()) return [];
+        return keywordsInput.value.split(',').map(k => k.trim()).filter(k => k.length > 0);
+    }
+
+    getMatchAll() {
+        const matchAllCheckbox = document.getElementById('keyword-match-all');
+        return matchAllCheckbox ? matchAllCheckbox.checked : false;
+    }
+
+    async previewKeywordMatches() {
+        const keywords = this.getKeywords();
+
+        if (keywords.length === 0) {
+            alert('Please enter at least one keyword to preview matches');
+            return;
+        }
+
+        const previewResults = document.getElementById('preview-results');
+        const previewLoading = previewResults.querySelector('.preview-loading');
+        const previewContent = previewResults.querySelector('.preview-content');
+        const btn = document.getElementById('preview-matches-btn');
+
+        // Show loading state
+        previewResults.classList.remove('hidden');
+        previewLoading.classList.remove('hidden');
+        previewContent.classList.add('hidden');
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/api/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subreddits: Array.from(this.selectedSubreddits),
+                    keywords,
+                    matchAll: this.getMatchAll(),
+                    sort: document.getElementById('sort-method').value,
+                    timeFilter: document.getElementById('time-filter').value
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            // Display results
+            this.renderPreviewResults(result);
+
+            previewLoading.classList.add('hidden');
+            previewContent.classList.remove('hidden');
+
+        } catch (err) {
+            alert('Error previewing matches: ' + err.message);
+            previewResults.classList.add('hidden');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    renderPreviewResults(result) {
+        const summaryEl = document.getElementById('preview-summary');
+        const tbody = document.querySelector('#preview-table tbody');
+
+        const matchMode = result.matchAll ? 'ALL keywords (AND)' : 'ANY keyword (OR)';
+        summaryEl.innerHTML = `Found <strong>${result.totalMatches}</strong> matching posts across ${result.subredditResults.length} subreddits using ${matchMode}`;
+
+        tbody.innerHTML = '';
+
+        result.subredditResults.forEach(sub => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>r/${this.escapeHtml(sub.subreddit)}</strong></td>
+                <td><span class="score-badge ${sub.matchingPosts > 5 ? 'score-high' : sub.matchingPosts > 0 ? 'score-medium' : 'score-low'}">${sub.matchingPosts}</span> / ${sub.totalScanned}</td>
+                <td class="text-muted">${sub.sampleTitles.map(t => this.escapeHtml(t)).join('<br>') || 'No matches'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ====================
     // Scraping
     // ====================
 
     async startScraping() {
+        const keywords = this.getKeywords();
+
         const config = {
             subreddits: Array.from(this.selectedSubreddits),
             topic: document.getElementById('topic-input').value.trim(),
             postLimit: parseInt(document.getElementById('post-limit').value),
             commentLimit: parseInt(document.getElementById('comment-limit').value),
             sort: document.getElementById('sort-method').value,
-            timeFilter: document.getElementById('time-filter').value
+            timeFilter: document.getElementById('time-filter').value,
+            keywords,
+            matchAll: this.getMatchAll()
         };
 
         try {
