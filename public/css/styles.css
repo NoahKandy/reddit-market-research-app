@@ -587,6 +587,18 @@ select:focus {
     gap: 0.5rem;
 }
 
+.job-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.job-actions .btn {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+}
+
 .status-dot {
     width: 10px;
     height: 10px;

@@ -858,20 +858,42 @@ class RedditResearchApp {
             const statusClass = `status-${job.status.replace('_', '-')}`;
             const date = new Date(job.createdAt).toLocaleString();
 
+            // Build action buttons based on job status
+            let actionButtons = '';
+
+            // Scraped data download (available when scraped or analyzed)
+            if (job.status === 'scraped' || job.status === 'analyzed') {
+                actionButtons += `<button class="btn btn-sm btn-secondary" onclick="app.downloadJobData('${job.id}')" title="Download scraped data">📥 Data</button>`;
+            }
+
+            // Analysis download (available when analyzed)
+            if (job.status === 'analyzed') {
+                actionButtons += `<button class="btn btn-sm btn-secondary" onclick="app.downloadJobAnalysis('${job.id}')" title="Download analysis">📊 Analysis</button>`;
+                actionButtons += `<button class="btn btn-sm btn-secondary" onclick="app.viewJob('${job.id}')">View</button>`;
+            }
+
             li.innerHTML = `
                 <div class="job-info">
                     <h4>${this.escapeHtml(job.config.topic || job.config.subreddits.join(', '))}</h4>
                     <p>${job.config.subreddits.length} subreddits • ${job.config.postLimit} posts/sub • ${date}</p>
                 </div>
-                <div class="job-status">
+                <div class="job-actions">
                     <span class="status-dot ${statusClass}"></span>
                     <span>${this.formatStatus(job.status)}</span>
-                    ${job.status === 'analyzed' ? `<button class="btn btn-sm btn-secondary" onclick="app.viewJob('${job.id}')">View</button>` : ''}
+                    ${actionButtons}
                 </div>
             `;
 
             list.appendChild(li);
         });
+    }
+
+    downloadJobData(jobId) {
+        window.open(`/api/jobs/${jobId}/export-data`, '_blank');
+    }
+
+    downloadJobAnalysis(jobId) {
+        window.open(`/api/jobs/${jobId}/export?format=json`, '_blank');
     }
 
     async viewJob(jobId) {
